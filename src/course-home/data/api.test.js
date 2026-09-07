@@ -194,9 +194,9 @@ describe('getDatesTabData', () => {
     await expect(getDatesTabData(courseId)).resolves.toEqual({});
   });
 
-  it('swallows a 403 and resolves to an empty object', async () => {
+  it('re-throws a 403 (access is handled via the metadata request, but tab data must still fail)', async () => {
     axiosMock.onGet(datesUrl).reply(403);
-    await expect(getDatesTabData(courseId)).resolves.toEqual({});
+    await expect(getDatesTabData(courseId)).rejects.toThrow();
   });
 
   it('re-throws other errors', async () => {

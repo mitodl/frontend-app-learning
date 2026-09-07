@@ -183,21 +183,73 @@ describe('Tab Page', () => {
       expect(screen.queryByTestId('LoadedTabPage')).not.toBeInTheDocument();
     });
 
-    it('does not render tab content when access is denied', async () => {
-      const testStore = await initializeTestStore({ excludeFetchCourse: true, excludeFetchSequence: true }, false);
-      testStore.dispatch(addModel({
-        modelType: 'courseHomeMeta',
-        model: { id: 'test-course', courseAccess: { hasAccess: false } },
-      }));
-      render(
-        <TabPage
-          {...mockData}
-          activeTabSlug="dates"
-          courseStatus={{ metadataQuery: { data: { courseAccess: { hasAccess: false } } }, tabDataQuery: {} }}
-        />,
-        { store: testStore, wrapWithRouter: true },
-      );
-      expect(screen.queryByTestId('LoadedTabPage')).not.toBeInTheDocument();
+    describe('when access is denied', () => {
+      let testStore;
+
+      beforeAll(async () => {
+        testStore = await initializeTestStore({ excludeFetchCourse: true, excludeFetchSequence: true }, false);
+        testStore.dispatch(addModel({
+          modelType: 'courseHomeMeta',
+          model: { id: 'test-course', courseAccess: { hasAccess: false } },
+        }));
+      });
+
+      it.each([
+        {
+          // A denied learner on a tab with a real redirect target (e.g. dates) is redirected
+          // when tab data succeeds too - the baseline case, unaffected by tab-data outcome.
+          name: 'does not render tab content when there is a redirect target and the tab-data query succeeds',
+          activeTabSlug: 'dates',
+          tabDataQuery: {},
+          expectLoaded: false,
+          expectError: false,
+        },
+        {
+          // A denied learner on a tab with a real redirect target must still be redirected
+          // even if the tab-data query also failed - the redirect must win over isError.
+          name: 'redirects instead of showing an error when there is a redirect target and the tab-data query also fails',
+          activeTabSlug: 'dates',
+          tabDataQuery: { isError: true },
+          expectLoaded: false,
+          expectError: false,
+        },
+        {
+          // Denied-with-no-redirect (outline) must still render content when tab data is fine -
+          // isError from a failing tab-data query must not leak into this case.
+          name: 'renders tab content when there is no redirect target and the tab-data query succeeds',
+          activeTabSlug: 'outline',
+          tabDataQuery: {},
+          expectLoaded: true,
+          expectError: false,
+        },
+        {
+          // The outline tab renders content for denied learners with no redirect URL, but that
+          // content must actually be there - a failed tab-data fetch (e.g. embargo also blocking
+          // the outline API itself) must win over "denied", not fall through to LoadedTabPage
+          // with no data to render.
+          name: 'displays the error message when there is no redirect target and the tab-data query also fails',
+          activeTabSlug: 'outline',
+          tabDataQuery: { isError: true },
+          expectLoaded: false,
+          expectError: true,
+        },
+      ])('$name', ({
+        activeTabSlug, tabDataQuery, expectLoaded, expectError,
+      }) => {
+        render(
+          <TabPage
+            {...mockData}
+            activeTabSlug={activeTabSlug}
+            courseStatus={{
+              metadataQuery: { data: { courseAccess: { hasAccess: false } } },
+              tabDataQuery,
+            }}
+          />,
+          { store: testStore, wrapWithRouter: true },
+        );
+        expect(!!screen.queryByTestId('LoadedTabPage')).toBe(expectLoaded);
+        expect(!!screen.queryByText('There was an error loading this course.')).toBe(expectError);
+      });
     });
   });
 });

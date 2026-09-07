@@ -8,8 +8,8 @@ import { getAuthenticatedHttpClient } from '@edx/frontend-platform/auth';
 import { initializeMockApp } from '../../setupTest';
 import { ToastProvider, useToast } from '../../generic/ToastContext';
 import {
-  useOutlineTabData, useLiveTabData, useProgressTabData, useResetDeadlines, usePostEvent, useRequestCert,
-  useDismissWelcomeMessage, useSaveWeeklyLearningGoal,
+  useDatesTabData, useOutlineTabData, useLiveTabData, useProgressTabData, useResetDeadlines, usePostEvent,
+  useRequestCert, useDismissWelcomeMessage, useSaveWeeklyLearningGoal,
 } from './apiHooks';
 
 const { loggingService } = initializeMockApp();
@@ -173,16 +173,36 @@ describe('course-home apiHooks', () => {
     });
   });
 
+  describe('useDatesTabData', () => {
+    const datesUrl = `${getConfig().LMS_BASE_URL}/api/course_home/dates/course-1`;
+
+    it('resolves to an empty object on a 401 (access is handled via the metadata request)', async () => {
+      axiosMock.onGet(datesUrl).reply(401, {});
+      const { wrapper } = buildWrapper();
+      const { result } = renderHook(() => useDatesTabData('course-1'), { wrapper });
+
+      await waitFor(() => expect(result.current.isSuccess).toBe(true));
+      expect(result.current.data).toEqual({});
+    });
+
+    it('surfaces the error on a 403 (course access errors like embargo must still block tab content)', async () => {
+      axiosMock.onGet(datesUrl).reply(403, {});
+      const { wrapper } = buildWrapper();
+      const { result } = renderHook(() => useDatesTabData('course-1'), { wrapper });
+
+      await waitFor(() => expect(result.current.isError).toBe(true));
+    });
+  });
+
   describe('useOutlineTabData', () => {
     const outlineUrl = `${getConfig().LMS_BASE_URL}/api/course_home/outline/course-1`;
 
-    it('resolves to an empty object on a 403 (access is handled via the metadata request)', async () => {
+    it('surfaces the error on a 403 (course access errors like embargo must still block tab content)', async () => {
       axiosMock.onGet(outlineUrl).reply(403, {});
       const { wrapper } = buildWrapper();
       const { result } = renderHook(() => useOutlineTabData('course-1'), { wrapper });
 
-      await waitFor(() => expect(result.current.isSuccess).toBe(true));
-      expect(result.current.data).toEqual({});
+      await waitFor(() => expect(result.current.isError).toBe(true));
     });
 
     it('surfaces the error on a non-403 failure', async () => {
@@ -256,17 +276,22 @@ describe('course-home apiHooks', () => {
       expect(axiosMock.history.get[0].url).toEqual(`${progressUrl}/7/`);
     });
 
-    it.each([401, 403])(
-      'resolves to an empty object on a %s (access is handled via the metadata request)',
-      async (status) => {
-        axiosMock.onGet(progressUrl).reply(status, {});
-        const { wrapper } = buildWrapper();
-        const { result } = renderHook(() => useProgressTabData('course-1'), { wrapper });
+    it('resolves to an empty object on a 401 (access is handled via the metadata request)', async () => {
+      axiosMock.onGet(progressUrl).reply(401, {});
+      const { wrapper } = buildWrapper();
+      const { result } = renderHook(() => useProgressTabData('course-1'), { wrapper });
 
-        await waitFor(() => expect(result.current.isSuccess).toBe(true));
-        expect(result.current.data).toEqual({});
-      },
-    );
+      await waitFor(() => expect(result.current.isSuccess).toBe(true));
+      expect(result.current.data).toEqual({});
+    });
+
+    it('surfaces the error on a 403 (course access errors like embargo must still block tab content)', async () => {
+      axiosMock.onGet(progressUrl).reply(403, {});
+      const { wrapper } = buildWrapper();
+      const { result } = renderHook(() => useProgressTabData('course-1'), { wrapper });
+
+      await waitFor(() => expect(result.current.isError).toBe(true));
+    });
 
     it('redirects to the legacy progress page and resolves to an empty object on a 404', async () => {
       // jsdom's location.replace is non-configurable, so we swap the whole location for the

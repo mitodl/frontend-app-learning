@@ -61,9 +61,14 @@ const deriveView = (courseStatus: CourseStatus): TabView => {
   if (metadataQuery.isError) { return { ...view, isError: true }; }
   if (metadataQuery.isPending) { return { ...view, isLoading: true }; }
   if (tabDataQuery?.isPending) { return { ...view, isLoading: true }; }
-  if (!metadataQuery.data?.courseAccess?.hasAccess) { return { ...view, isDenied: true }; }
-  if (tabDataQuery?.isError) { return { ...view, isError: true }; }
-  return view;
+  // isDenied and isError aren't mutually exclusive: a denied learner with a redirect target
+  // navigates away before either is read, but one without a redirect (the outline tab's
+  // "show the page anyway" case) still needs tab data, so a failed fetch must set isError.
+  return {
+    ...view,
+    isDenied: !metadataQuery.data?.courseAccess?.hasAccess,
+    isError: !!tabDataQuery?.isError,
+  };
 };
 
 const TabPage = ({
